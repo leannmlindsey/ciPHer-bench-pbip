@@ -1,40 +1,77 @@
 # Setup + reproduce
 
-## 1. Clone upstream PBIP + download Google Drive contents
+## Workflow at a glance
 
-```bash
-# Wherever PBIP_REPO in your env points:
-git clone https://github.com/a1678019300/PBIP.git "$PBIP_REPO"
+```text
+1. (on laptop, ONCE) download PBIP's Google Drive contents
+2. (on laptop) build data zip
+3. (on laptop) rsync zip to Delta
+4. (on Delta) unzip into data/
+5. (on Delta) source pbip.env, build conda env, run wrapper
 ```
 
-The repo on its own won't run — PBIP's README points at a Google Drive
-folder for the trained weights + UniRep features + raw FASTAs:
+## 1. (Manual one-time step) — download the Google Drive contents
+
+PBIP's upstream README points at this Drive folder for the trained
+weights + pre-computed UniRep features + raw FASTAs:
 
   https://drive.google.com/drive/folders/1c1JNePxM5IFlTqt6CglUHWi-J-Z_1uoo
 
-Download the six zips manually from that folder:
+Download the six zips manually (browser, GDrive doesn't allow programmatic
+folder downloads):
 - `bac_faa.zip`
 - `bac_fasta.zip`
-- `data.zip`             ← contains data/PBIP/{host,phage}/ UniRep features
-- `model.zip`            ← contains model/dataset_PBIP/final_model.h5
+- `data.zip`             ← UniRep features for 120 hosts + 103 phages
+- `model.zip`            ← `final_model.h5` (~40 MB, Keras 2)
 - `phage_faa.zip`
 - `phage_fasta.zip`
 
-Extract all six into `$PBIP_REPO/` so the final layout is:
+Extract all six into a `PBIP/` directory on the laptop. The final layout:
 
 ```
-$PBIP_REPO/
-├── data/PBIP/host/*.txt          # 120 host UniRep 1900-d vectors
-├── data/PBIP/phage/*.txt         # 103 phage UniRep 1900-d vectors
-├── model/dataset_PBIP/final_model.h5   # ~40 MB Keras 2 model
-├── bac_faa_2021/                 # raw bacterial AA FASTAs
-├── phage_faa_2021/               # raw phage AA FASTAs
+.../pbip_run/PBIP/
+├── data/PBIP/host/*.txt          (120 host UniRep 1900-d vectors)
+├── data/PBIP/phage/*.txt         (103 phage UniRep 1900-d vectors)
+├── model/dataset_PBIP/final_model.h5
+├── bac_faa_2021/                  (raw bacterial AA FASTAs)
+├── phage_faa_2021/                (raw phage AA FASTAs)
 └── ...
 ```
 
-## 2. Build the conda env
+## 2. Build the data zip
 
 ```bash
+cd /Users/leannmlindsey/Desktop/ciPHer-bench-staging/ciPHer-bench-pbip
+bash build_data_zip.sh
+# Output: /Users/leannmlindsey/Desktop/ciPHer-bench-data-zips/ciPHer-bench-pbip-data.zip
+```
+
+Layout mirrors the laptop tree:
+- `data/PBIP/` — upstream code + downloaded GDrive contents
+- `data/cipher/data/validation_data/HOST_RANGE/PBIP/metadata/` — cipher's
+  PBIP interaction matrix
+- `data/cipher_val_genomes/PBIP/metadata/` — same file, accessible via
+  `${CIPHER_VAL_GENOMES}/PBIP/metadata/`
+
+## 3. Transfer + unzip on Delta
+
+```bash
+ZIP=/Users/leannmlindsey/Desktop/ciPHer-bench-data-zips/ciPHer-bench-pbip-data.zip
+rsync -avz --info=progress2 "${ZIP}" \
+    llindsey1@dt-login.delta.ncsa.illinois.edu:/projects/bfzj/llindsey1/PHI_TSP/ciPHer-comparisons/pbip/data/
+
+ssh llindsey1@dt-login.delta.ncsa.illinois.edu
+cd /projects/bfzj/llindsey1/PHI_TSP/ciPHer-comparisons/pbip
+
+git clone git@github.com:LeAnnMLindsey/ciPHer-bench-pbip.git .   # first time
+cd data && unzip -q ciPHer-bench-pbip-data.zip && cd ..
+```
+
+## 4. Build the conda env
+
+```bash
+module load anaconda3 2>/dev/null || true
+eval "$(conda shell.bash hook)"
 conda create -n pbip python=3.10 -y
 conda activate pbip
 pip install tensorflow tf-keras keras imbalanced-learn pandas scikit-learn biopython numpy
@@ -45,36 +82,20 @@ is installed — required because PBIP's `final_model.h5` was saved with
 Keras 2. The wrapper sets `TF_USE_LEGACY_KERAS=1` to route Keras imports
 through the shim.
 
-## 3. Configure paths
+## 5. Configure paths + run
 
 ```bash
-cp config/pbip.env.template pbip.env       # laptop
-# or:
-cp config/pbip_delta.env    pbip.env
-cp config/pbip_biowulf.env  pbip.env
-
-pico pbip.env
+cp config/pbip_delta.env pbip.env
 source pbip.env
 
-echo "PBIP_REPO=$PBIP_REPO"
-echo "CIPHER_VAL_GENOMES=$CIPHER_VAL_GENOMES"
-ls "$PBIP_REPO/model/dataset_PBIP/final_model.h5"   # should exist (~40 MB)
-ls "$PBIP_REPO/data/PBIP/host"   | wc -l            # should be 120
-ls "$PBIP_REPO/data/PBIP/phage"  | wc -l            # should be 103
+# Verify:
+ls "${PBIP_REPO}/model/dataset_PBIP/final_model.h5"   # ~40 MB
+ls "${PBIP_REPO}/data/PBIP/host"   | wc -l            # 120
+ls "${PBIP_REPO}/data/PBIP/phage"  | wc -l            # 103
+
+# Run in-distribution evaluation (PBIP-on-PBIP):
+./scripts/run_pbip_on_pbip_dataset.sh
 ```
 
-## 4. Run in-distribution evaluation (PBIP-on-PBIP)
-
-```bash
-source pbip.env
-
-python scripts/run_pbip_inference.py \
-    --phage_unirep_dir       "$PBIP_REPO/data/PBIP/phage" \
-    --host_unirep_dir        "$PBIP_REPO/data/PBIP/host" \
-    --model_h5               "$PBIP_REPO/model/dataset_PBIP/final_model.h5" \
-    --interaction_matrix     "$CIPHER_VAL_GENOMES/PBIP/metadata/interaction_matrix.tsv" \
-    --out_csv                "$PBIP_OUTPUT_ROOT/PBIP/prediction_scores.csv"
-```
-
-This produces a hosts × phages prediction matrix you can score with
-cipher's HR@k pipeline.
+Output: `${PBIP_OUTPUT_ROOT}/PBIP/prediction_scores.csv` (hosts × phages
+predicted lytic-interaction probability matrix).
