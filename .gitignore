@@ -1,6 +1,32 @@
+# Local environment configuration (machine-specific paths)
+*.env
+!config/*.env.template
+!config/*.env
+
+# Upstream PBIP code + weights + data — Google Drive download (~1.6 GB)
 PBIP/
+
+# Model + feature files
 *.h5
 *.txt
 *.zip
+*.bin
+*.ckpt
+
+# Large genomic data
+*.faa
+*.fasta
+*.fa
+*.fna
+
+# Run outputs
+predictions/
+*.csv
+!config/*.csv
+*.log
+
+# Caches
 __pycache__/
 .DS_Store
+.ipynb_checkpoints/
+*.pyc
