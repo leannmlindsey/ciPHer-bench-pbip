@@ -1,0 +1,6 @@
+PBIP/
+*.h5
+*.txt
+*.zip
+__pycache__/
+.DS_Store
