@@ -1,0 +1,26 @@
+# Conda env for PBIP (Ma et al. 2025) on Delta.
+#
+# Build:
+#   conda env create -f environment.yml
+# Activate:
+#   conda activate pbip
+#
+# PBIP's final_model.h5 was saved with Keras 2; tf-keras is the Keras 2
+# compatibility shim used when running on TensorFlow 2.x. The wrapper
+# sets TF_USE_LEGACY_KERAS=1 to route Keras imports through the shim.
+
+name: pbip
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - tensorflow
+      - tf-keras
+      - keras
+      - imbalanced-learn
+      - pandas
+      - scikit-learn
+      - biopython
+      - numpy

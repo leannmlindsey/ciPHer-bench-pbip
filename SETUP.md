@@ -70,11 +70,13 @@ cd data && unzip -q ciPHer-bench-pbip-data.zip && cd ..
 ## 4. Build the conda env
 
 ```bash
-module load anaconda3 2>/dev/null || true
-eval "$(conda shell.bash hook)"
-conda create -n pbip python=3.10 -y
+# Conda must be available; install Miniforge to project space if not:
+#   wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(uname -m).sh
+#   bash Miniforge3-Linux-$(uname -m).sh -b -p /projects/bfzj/llindsey1/miniforge3
+#   source /projects/bfzj/llindsey1/miniforge3/etc/profile.d/conda.sh
+
+conda env create -f environment.yml
 conda activate pbip
-pip install tensorflow tf-keras keras imbalanced-learn pandas scikit-learn biopython numpy
 ```
 
 The `tf-keras` package provides the Keras 2 API even when TensorFlow 2.x
